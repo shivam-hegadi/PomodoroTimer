@@ -18,7 +18,7 @@ State currentState = IDLE;
 unsigned long targetTime = WORK_TIME;
 unsigned long remainingSeconds = WORK_TIME;
 unsigned long lastTick = 0;
-unsigned long lastTouchTime = 0;  // Debounce timer
+unsigned long lastTouchTime = 0;
 
 #define BTN_START_X 20
 #define BTN_START_Y 180
@@ -30,29 +30,28 @@ unsigned long lastTouchTime = 0;  // Debounce timer
 #define BTN_RESET_W 120
 #define BTN_RESET_H 50
 
-#define DEBOUNCE_TIME 250  // ms
+#define DEBOUNCE_TIME 250
 
-// Calibration constants - adjust these based on your touchscreen
-#define MAP_X_MIN  200
-#define MAP_X_MAX  3800
-#define MAP_Y_MIN  200
-#define MAP_Y_MAX  3800
+float alphaX, betaX, deltaX, alphaY, betaY, deltaY;
 
 void getScreenCoords(TS_Point p, uint16_t *x, uint16_t *y) {
-  // Map raw touch coordinates to screen coordinates
-  *x = map(p.x, MAP_X_MIN, MAP_X_MAX, 0, tft.width());
-  *y = map(p.y, MAP_Y_MIN, MAP_Y_MAX, 0, tft.height());
+  int raw_x = (int)p.x;
+  int raw_y = (int)p.y;
   
-  // Clamp to screen bounds
-  if (*x < 0) *x = 0;
-  if (*x >= tft.width()) *x = tft.width() - 1;
-  if (*y < 0) *y = 0;
-  if (*y >= tft.height()) *y = tft.height() - 1;
+  int screen_x = (int)(alphaX * raw_x + betaX * raw_y + deltaX);
+  int screen_y = (int)(alphaY * raw_x + betaY * raw_y + deltaY);
+  
+  if (screen_x < 0) screen_x = 0;
+  if (screen_x >= tft.width()) screen_x = tft.width() - 1;
+  if (screen_y < 0) screen_y = 0;
+  if (screen_y >= tft.height()) screen_y = tft.height() - 1;
+  
+  *x = (uint16_t)screen_x;
+  *y = (uint16_t)screen_y;
 }
 
 bool isTouchInsideButton(uint16_t x, uint16_t y, uint16_t btn_x, uint16_t btn_y, uint16_t btn_w, uint16_t btn_h) {
-  return (x >= btn_x && x < btn_x + btn_w &&
-          y >= btn_y && y < btn_y + btn_h);
+  return (x >= btn_x && x < btn_x + btn_w && y >= btn_y && y < btn_y + btn_h);
 }
 
 void updateDisplay() {
@@ -82,7 +81,6 @@ void updateDisplay() {
   sprintf(buf, "%02d:%02d", mins, secs);
   tft.print(buf);
 
-  // Start/Pause button
   tft.fillRoundRect(BTN_START_X, BTN_START_Y, BTN_START_W, BTN_START_H, 8, TFT_DARKGREEN);
   tft.setTextColor(TFT_WHITE, TFT_DARKGREEN);
   tft.setTextSize(2);
@@ -92,7 +90,6 @@ void updateDisplay() {
   else
     tft.print("Start");
 
-  // Reset button
   tft.fillRoundRect(BTN_RESET_X, BTN_RESET_Y, BTN_RESET_W, BTN_RESET_H, 8, TFT_MAROON);
   tft.setTextColor(TFT_WHITE, TFT_MAROON);
   tft.setTextSize(2);
@@ -126,10 +123,24 @@ void resetTimer() {
   updateDisplay();
 }
 
+void initializeCalibration() {
+  alphaX = 0.0746;
+  betaX = -0.0015;
+  deltaX = -18.2;
+  alphaY = 0.0019;
+  betaY = 0.0743;
+  deltaY = 328.1;
+  
+  Serial.println("Default calibration values loaded.");
+  Serial.println("Adjust these if touches are inaccurate:");
+  Serial.printf("alphaX=%.4f, betaX=%.4f, deltaX=%.1f\n", alphaX, betaX, deltaX);
+  Serial.printf("alphaY=%.4f, betaY=%.4f, deltaY=%.1f\n", alphaY, betaY, deltaY);
+}
+
 void setup() {
   Serial.begin(115200);
   delay(1000);
-  Serial.println("\n\nPomodoro Timer - Touchscreen Debug");
+  Serial.println("\n\nPomodoro Timer - Touchscreen Calibrated");
   
   tft.init();
   tft.setRotation(1);
@@ -143,18 +154,17 @@ void setup() {
   targetTime = WORK_TIME;
   currentState = IDLE;
   lastTouchTime = 0;
+  
+  initializeCalibration();
   updateDisplay();
 
   Serial.println("Setup complete. Touchscreen active.");
-  Serial.println("Start button: X=20-140, Y=180-230");
-  Serial.println("Reset button: X=180-300, Y=180-230");
 }
 
 void loop() {
-  if (touch.touched()) {
+  if (touch.tirqTouched() && touch.touched()) {
     unsigned long currentTime = millis();
     
-    // Debounce: ignore touches within DEBOUNCE_TIME of the last one
     if (currentTime - lastTouchTime < DEBOUNCE_TIME) {
       return;
     }
@@ -166,12 +176,10 @@ void loop() {
 
     Serial.printf("Touch - Raw: (%4d, %4d) -> Mapped: (%3d, %3d)\n", p.x, p.y, x, y);
 
-    // Check START button
     if (isTouchInsideButton(x, y, BTN_START_X, BTN_START_Y, BTN_START_W, BTN_START_H)) {
-      Serial.println(">> START button pressed");
+      Serial.println(">> START/PAUSE button pressed");
       startTimer();
     }
-    // Check RESET button
     else if (isTouchInsideButton(x, y, BTN_RESET_X, BTN_RESET_Y, BTN_RESET_W, BTN_RESET_H)) {
       Serial.println(">> RESET button pressed");
       resetTimer();
@@ -181,7 +189,6 @@ void loop() {
     }
   }
 
-  // Timer countdown logic
   if (currentState == WORKING || currentState == BREAKING) {
     unsigned long now = millis();
     if (now - lastTick >= 1000) {
@@ -190,7 +197,6 @@ void loop() {
         remainingSeconds--;
         updateDisplay();
       } else {
-        // Time's up - transition to next state
         if (currentState == WORKING) {
           remainingSeconds = BREAK_TIME;
           targetTime = BREAK_TIME;
@@ -202,7 +208,7 @@ void loop() {
           targetTime = WORK_TIME;
           Serial.println("Break complete - returning to IDLE");
         }
-        updateDisplay();USED:  tft.print("PAUSED"); break;
+        updateDisplay();
         lastTick = millis();
       }
     }
