@@ -2,57 +2,51 @@
 #include <SPI.h>
 #include <XPT2046_Touchscreen.h>
 
-#define TFT_CS   5
-#define TFT_DC   21
-#define TFT_RST  -1
-#define TOUCH_CS 22
+#define TFT_BL_PIN    21
+#define TOUCH_MOSI    32
+#define TOUCH_MISO    39
+#define TOUCH_CLK     25
+#define TOUCH_CS_PIN  33
+#define TOUCH_IRQ     36
+
+#define TS_MINX  200
+#define TS_MAXX  3800
+#define TS_MINY  300
+#define TS_MAXY  3700
+
+#define SCR_W  320
+#define SCR_H  240
+
+#define TOUCH_DEBOUNCE_MS  200
 
 TFT_eSPI tft = TFT_eSPI();
-XPT2046_Touchscreen touch(TOUCH_CS);
+SPIClass touchSPI(HSPI);
+XPT2046_Touchscreen touch(TOUCH_CS_PIN, TOUCH_IRQ);
 
-const unsigned long WORK_TIME   = 25 * 60;
-const unsigned long BREAK_TIME  = 5 * 60;
+const unsigned long WORK_TIME  = 25 * 60;
+const unsigned long BREAK_TIME =  5 * 60;
 
 enum State { IDLE, WORKING, BREAKING, PAUSED };
-State currentState = IDLE;
-unsigned long targetTime = WORK_TIME;
+State currentState   = IDLE;
+unsigned long targetTime       = WORK_TIME;
 unsigned long remainingSeconds = WORK_TIME;
-unsigned long lastTick = 0;
-unsigned long lastTouchTime = 0;
+unsigned long lastTick         = 0;
 
-#define BTN_START_X 20
-#define BTN_START_Y 180
-#define BTN_START_W 120
-#define BTN_START_H 50
+#define BTN_START_X  20
+#define BTN_START_Y  180
+#define BTN_START_W  120
+#define BTN_START_H  50
 
-#define BTN_RESET_X 180
-#define BTN_RESET_Y 180
-#define BTN_RESET_W 120
-#define BTN_RESET_H 50
+#define BTN_RESET_X  180
+#define BTN_RESET_Y  180
+#define BTN_RESET_W  120
+#define BTN_RESET_H  50
 
-#define DEBOUNCE_TIME 250
-
-float alphaX, betaX, deltaX, alphaY, betaY, deltaY;
-
-void getScreenCoords(TS_Point p, uint16_t *x, uint16_t *y) {
-  int raw_x = (int)p.x;
-  int raw_y = (int)p.y;
-  
-  int screen_x = (int)(alphaX * raw_x + betaX * raw_y + deltaX);
-  int screen_y = (int)(alphaY * raw_x + betaY * raw_y + deltaY);
-  
-  if (screen_x < 0) screen_x = 0;
-  if (screen_x >= tft.width()) screen_x = tft.width() - 1;
-  if (screen_y < 0) screen_y = 0;
-  if (screen_y >= tft.height()) screen_y = tft.height() - 1;
-  
-  *x = (uint16_t)screen_x;
-  *y = (uint16_t)screen_y;
-}
-
-bool isTouchInsideButton(uint16_t x, uint16_t y, uint16_t btn_x, uint16_t btn_y, uint16_t btn_w, uint16_t btn_h) {
-  return (x >= btn_x && x < btn_x + btn_w && y >= btn_y && y < btn_y + btn_h);
-}
+static bool          touchPhysical    = false;
+static bool          touchConsumed    = false;
+static int           touchX           = 0;
+static int           touchY           = 0;
+static unsigned long touchReleasedMs  = 0;
 
 void updateDisplay() {
   tft.fillScreen(TFT_BLACK);
@@ -66,10 +60,10 @@ void updateDisplay() {
   tft.setTextSize(2);
   tft.setCursor(10, 50);
   switch (currentState) {
-    case IDLE:    tft.print("IDLE"); break;
-    case WORKING: tft.print("WORK"); break;
-    case BREAKING:tft.print("BREAK"); break;
-    case PAUSED:  tft.print("PAUSED"); break;
+    case IDLE:     tft.print("IDLE");   break;
+    case WORKING:  tft.print("WORK");   break;
+    case BREAKING: tft.print("BREAK");  break;
+    case PAUSED:   tft.print("PAUSED"); break;
   }
 
   tft.setTextColor(TFT_YELLOW, TFT_BLACK);
@@ -97,97 +91,87 @@ void updateDisplay() {
   tft.print("Reset");
 }
 
+bool insideButton(int x, int y, int bx, int by, int bw, int bh) {
+  return (x >= bx && x < bx + bw && y >= by && y < by + bh);
+}
+
 void startTimer() {
   if (currentState == IDLE) {
     remainingSeconds = WORK_TIME;
-    targetTime = WORK_TIME;
-    currentState = WORKING;
-    lastTick = millis();
-    Serial.println("Timer started - WORKING");
+    targetTime       = WORK_TIME;
+    currentState     = WORKING;
+    lastTick         = millis();
   } else if (currentState == WORKING || currentState == BREAKING) {
     currentState = PAUSED;
-    Serial.println("Timer paused");
   } else if (currentState == PAUSED) {
     currentState = (remainingSeconds == targetTime) ? WORKING : BREAKING;
-    lastTick = millis();
-    Serial.println("Timer resumed");
+    lastTick     = millis();
   }
   updateDisplay();
 }
 
 void resetTimer() {
-  currentState = IDLE;
+  currentState     = IDLE;
   remainingSeconds = WORK_TIME;
-  targetTime = WORK_TIME;
-  Serial.println("Timer reset to IDLE");
+  targetTime       = WORK_TIME;
   updateDisplay();
 }
 
-void initializeCalibration() {
-  alphaX = 0.0746;
-  betaX = -0.0015;
-  deltaX = -18.2;
-  alphaY = 0.0019;
-  betaY = 0.0743;
-  deltaY = 328.1;
-  
-  Serial.println("Default calibration values loaded.");
-  Serial.println("Adjust these if touches are inaccurate:");
-  Serial.printf("alphaX=%.4f, betaX=%.4f, deltaX=%.1f\n", alphaX, betaX, deltaX);
-  Serial.printf("alphaY=%.4f, betaY=%.4f, deltaY=%.1f\n", alphaY, betaY, deltaY);
+void handleTouchEvent() {
+  bool hw = touch.tirqTouched() && touch.touched();
+
+  if (hw && !touchPhysical) {
+    if (millis() - touchReleasedMs >= TOUCH_DEBOUNCE_MS) {
+      TS_Point p = touch.getPoint();
+      touchX = constrain(map(p.x, TS_MINX, TS_MAXX, 0, SCR_W), 0, SCR_W - 1);
+      touchY = constrain(map(p.y, TS_MINY, TS_MAXY, 0, SCR_H), 0, SCR_H - 1);
+      touchConsumed = false;
+
+      Serial.printf("Touch: raw(%d,%d) -> screen(%d,%d)\n", p.x, p.y, touchX, touchY);
+
+      if (!touchConsumed && insideButton(touchX, touchY, BTN_START_X, BTN_START_Y, BTN_START_W, BTN_START_H)) {
+        Serial.println(">> START/PAUSE");
+        touchConsumed = true;
+        startTimer();
+      } else if (!touchConsumed && insideButton(touchX, touchY, BTN_RESET_X, BTN_RESET_Y, BTN_RESET_W, BTN_RESET_H)) {
+        Serial.println(">> RESET");
+        touchConsumed = true;
+        resetTimer();
+      }
+    }
+    touchPhysical = true;
+
+  } else if (!hw && touchPhysical) {
+    touchPhysical   = false;
+    touchConsumed   = false;
+    touchReleasedMs = millis();
+  }
 }
 
 void setup() {
   Serial.begin(115200);
-  delay(1000);
-  Serial.println("\n\nPomodoro Timer - Touchscreen Calibrated");
-  
+  delay(400);
+  Serial.println("\nPomodoro Timer starting...");
+
   tft.init();
   tft.setRotation(1);
   tft.fillScreen(TFT_BLACK);
-  tft.setTextColor(TFT_WHITE, TFT_BLACK);
-  
-  touch.begin();
+
+  touchSPI.begin(TOUCH_CLK, TOUCH_MISO, TOUCH_MOSI, TOUCH_CS_PIN);
+  touch.begin(touchSPI);
   touch.setRotation(1);
 
   remainingSeconds = WORK_TIME;
-  targetTime = WORK_TIME;
-  currentState = IDLE;
-  lastTouchTime = 0;
-  
-  initializeCalibration();
-  updateDisplay();
+  targetTime       = WORK_TIME;
+  currentState     = IDLE;
+  touchReleasedMs  = millis();
 
-  Serial.println("Setup complete. Touchscreen active.");
+  updateDisplay();
+  Serial.println("Ready. Buttons: Start(20,180,120x50) Reset(180,180,120x50)");
 }
 
 void loop() {
-  if (touch.tirqTouched() && touch.touched()) {
-    unsigned long currentTime = millis();
-    
-    if (currentTime - lastTouchTime < DEBOUNCE_TIME) {
-      return;
-    }
-    lastTouchTime = currentTime;
-    
-    TS_Point p = touch.getPoint();
-    uint16_t x, y;
-    getScreenCoords(p, &x, &y);
-
-    Serial.printf("Touch - Raw: (%4d, %4d) -> Mapped: (%3d, %3d)\n", p.x, p.y, x, y);
-
-    if (isTouchInsideButton(x, y, BTN_START_X, BTN_START_Y, BTN_START_W, BTN_START_H)) {
-      Serial.println(">> START/PAUSE button pressed");
-      startTimer();
-    }
-    else if (isTouchInsideButton(x, y, BTN_RESET_X, BTN_RESET_Y, BTN_RESET_W, BTN_RESET_H)) {
-      Serial.println(">> RESET button pressed");
-      resetTimer();
-    }
-    else {
-      Serial.println(">> Touch outside buttons");
-    }
-  }
+  handleTouchEvent();
 
   if (currentState == WORKING || currentState == BREAKING) {
     unsigned long now = millis();
@@ -199,19 +183,20 @@ void loop() {
       } else {
         if (currentState == WORKING) {
           remainingSeconds = BREAK_TIME;
-          targetTime = BREAK_TIME;
-          currentState = BREAKING;
-          Serial.println("Work session complete - starting break");
-        } else if (currentState == BREAKING) {
-          currentState = IDLE;
+          targetTime       = BREAK_TIME;
+          currentState     = BREAKING;
+          Serial.println("Work done, break starting");
+        } else {
           remainingSeconds = WORK_TIME;
-          targetTime = WORK_TIME;
-          Serial.println("Break complete - returning to IDLE");
+          targetTime       = WORK_TIME;
+          currentState     = IDLE;
+          Serial.println("Break done, returning to IDLE");
         }
         updateDisplay();
         lastTick = millis();
       }
     }
   }
-  delay(10);
+
+  delay(5);
 }
