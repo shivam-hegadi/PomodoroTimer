@@ -1,0 +1,170 @@
+#include <TFT_eSPI.h>
+#include <SPI.h>
+#include <XPT2046_Touchscreen.h>
+
+#define TFT_CS   5
+#define TFT_DC   21
+#define TFT_RST  -1
+#define TOUCH_CS 22
+
+TFT_eSPI tft = TFT_eSPI();
+XPT2046_Touchscreen touch(TOUCH_CS);
+
+const unsigned long WORK_TIME   = 25 * 60;
+const unsigned long BREAK_TIME  = 5 * 60;
+
+enum State { IDLE, WORKING, BREAKING, PAUSED };
+State currentState = IDLE;
+unsigned long targetTime = WORK_TIME;
+unsigned long remainingSeconds = WORK_TIME;
+unsigned long lastTick = 0;
+
+#define BTN_START_X 20
+#define BTN_START_Y 180
+#define BTN_START_W 120
+#define BTN_START_H 50
+
+#define BTN_RESET_X 180
+#define BTN_RESET_Y 180
+#define BTN_RESET_W 120
+#define BTN_RESET_H 50
+
+#define MAP_X_MIN  200
+#define MAP_X_MAX  3800
+#define MAP_Y_MIN  200
+#define MAP_Y_MAX  3800
+
+void getScreenCoords(TS_Point p, uint16_t *x, uint16_t *y) {
+  *x = map(p.x, MAP_X_MIN, MAP_X_MAX, 0, tft.width());
+  *y = map(p.y, MAP_Y_MIN, MAP_Y_MAX, 0, tft.height());
+}
+
+void updateDisplay() {
+  tft.fillScreen(TFT_BLACK);
+
+  tft.setTextColor(TFT_CYAN, TFT_BLACK);
+  tft.setTextSize(2);
+  tft.setCursor(10, 10);
+  tft.print("Pomodoro");
+
+  tft.setTextColor(TFT_WHITE, TFT_BLACK);
+  tft.setTextSize(2);
+  tft.setCursor(10, 50);
+  switch (currentState) {
+    case IDLE:    tft.print("IDLE"); break;
+    case WORKING: tft.print("WORK"); break;
+    case BREAKING:tft.print("BREAK"); break;
+    case PAUSED:  tft.print("PAUSED"); break;
+  }
+
+  tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+  tft.setTextSize(6);
+  tft.setCursor(30, 90);
+  unsigned int mins = remainingSeconds / 60;
+  unsigned int secs = remainingSeconds % 60;
+  char buf[6];
+  sprintf(buf, "%02d:%02d", mins, secs);
+  tft.print(buf);
+
+  tft.fillRoundRect(BTN_START_X, BTN_START_Y, BTN_START_W, BTN_START_H, 8, TFT_DARKGREEN);
+  tft.setTextColor(TFT_WHITE, TFT_DARKGREEN);
+  tft.setTextSize(2);
+  tft.setCursor(BTN_START_X + 20, BTN_START_Y + 12);
+  if (currentState == WORKING || currentState == BREAKING)
+    tft.print("Pause");
+  else
+    tft.print("Start");
+
+  tft.fillRoundRect(BTN_RESET_X, BTN_RESET_Y, BTN_RESET_W, BTN_RESET_H, 8, TFT_MAROON);
+  tft.setTextColor(TFT_WHITE, TFT_MAROON);
+  tft.setTextSize(2);
+  tft.setCursor(BTN_RESET_X + 30, BTN_RESET_Y + 12);
+  tft.print("Reset");
+}
+
+void startTimer() {
+  if (currentState == IDLE) {
+    remainingSeconds = WORK_TIME;
+    targetTime = WORK_TIME;
+    currentState = WORKING;
+    lastTick = millis();
+  } else if (currentState == WORKING || currentState == BREAKING) {
+    currentState = PAUSED;
+  } else if (currentState == PAUSED) {
+    currentState = (remainingSeconds == targetTime) ? WORKING : BREAKING;
+    lastTick = millis();
+  }
+  updateDisplay();
+}
+
+void resetTimer() {
+  currentState = IDLE;
+  remainingSeconds = WORK_TIME;
+  targetTime = WORK_TIME;
+  updateDisplay();
+}
+
+void setup() {
+  Serial.begin(115200);
+  
+  tft.init();
+  tft.setRotation(1);
+  tft.fillScreen(TFT_BLACK);
+  tft.setTextColor(TFT_WHITE, TFT_BLACK);
+  
+  touch.begin();
+  touch.setRotation(1);
+
+  remainingSeconds = WORK_TIME;
+  targetTime = WORK_TIME;
+  currentState = IDLE;
+  updateDisplay();
+
+  Serial.println("Pomodoro Timer started.");
+  Serial.println("Tap the screen to see raw touch values for calibration.");
+}
+
+void loop() {
+  if (touch.touched()) {
+    TS_Point p = touch.getPoint();
+    uint16_t x, y;
+    getScreenCoords(p, &x, &y);
+
+    Serial.printf("Raw: %4d, %4d  ->  Mapped: %3d, %3d\n", p.x, p.y, x, y);
+
+    if (x >= BTN_START_X && x <= BTN_START_X + BTN_START_W &&
+        y >= BTN_START_Y && y <= BTN_START_Y + BTN_START_H) {
+      startTimer();
+      delay(200);
+    }
+    else if (x >= BTN_RESET_X && x <= BTN_RESET_X + BTN_RESET_W &&
+             y >= BTN_RESET_Y && y <= BTN_RESET_Y + BTN_RESET_H) {
+      resetTimer();
+      delay(200);
+    }
+  }
+
+  if (currentState == WORKING || currentState == BREAKING) {
+    unsigned long now = millis();
+    if (now - lastTick >= 1000) {
+      lastTick = now;
+      if (remainingSeconds > 0) {
+        remainingSeconds--;
+        updateDisplay();
+      } else {
+        if (currentState == WORKING) {
+          remainingSeconds = BREAK_TIME;
+          targetTime = BREAK_TIME;
+          currentState = BREAKING;
+        } else if (currentState == BREAKING) {
+          currentState = IDLE;
+          remainingSeconds = WORK_TIME;
+          targetTime = WORK_TIME;
+        }
+        updateDisplay();
+        lastTick = millis();
+      }
+    }
+  }
+  delay(10);
+}
