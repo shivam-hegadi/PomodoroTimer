@@ -36,6 +36,7 @@ unsigned long lastTick         = 0;
 lv_obj_t *state_label;
 lv_obj_t *time_label;
 lv_obj_t *action_btn;
+lv_obj_t *action_btn_label;
 lv_obj_t *reset_btn;
 
 static bool     touchPhysical    = false;
@@ -101,17 +102,17 @@ static void action_btn_event(lv_event_t *e)
             currentState = WORKING;
             lastTick = millis();
             lv_label_set_text(state_label, "WORK");
-            lv_label_set_text(action_btn, "Pause");
+            lv_label_set_text(action_btn_label, "Pause");
         } else if (currentState == WORKING || currentState == BREAKING) {
             currentState = PAUSED;
             lv_label_set_text(state_label, "PAUSED");
-            lv_label_set_text(action_btn, "Start");
+            lv_label_set_text(action_btn_label, "Start");
         } else if (currentState == PAUSED) {
             if (remainingSeconds == WORK_TIME) currentState = WORKING;
             else currentState = BREAKING;
             lastTick = millis();
             lv_label_set_text(state_label, (currentState == WORKING) ? "WORK" : "BREAK");
-            lv_label_set_text(action_btn, "Pause");
+            lv_label_set_text(action_btn_label, "Pause");
         }
         update_ui();
     }
@@ -124,7 +125,7 @@ static void reset_btn_event(lv_event_t *e)
         currentState = IDLE;
         remainingSeconds = WORK_TIME;
         lv_label_set_text(state_label, "IDLE");
-        lv_label_set_text(action_btn, "Start");
+        lv_label_set_text(action_btn_label, "Start");
         update_ui();
     }
 }
@@ -152,9 +153,9 @@ void create_ui()
     lv_obj_align(action_btn, LV_ALIGN_BOTTOM_MID, 0, -70);
     lv_obj_set_style_bg_color(action_btn, lv_color_hex(0x2E8B57), 0);
     lv_obj_add_event_cb(action_btn, action_btn_event, LV_EVENT_CLICKED, NULL);
-    lv_obj_t *act_label = lv_label_create(action_btn);
-    lv_label_set_text(act_label, "Start");
-    lv_obj_center(act_label);
+    action_btn_label = lv_label_create(action_btn);
+    lv_label_set_text(action_btn_label, "Start");
+    lv_obj_center(action_btn_label);
 
     reset_btn = lv_btn_create(scr);
     lv_obj_set_size(reset_btn, 200, 50);
@@ -225,12 +226,12 @@ void loop()
                     remainingSeconds = BREAK_TIME;
                     currentState = BREAKING;
                     lv_label_set_text(state_label, "BREAK");
-                    lv_label_set_text(action_btn, "Pause");
+                    lv_label_set_text(action_btn_label, "Pause");
                 } else {
                     remainingSeconds = WORK_TIME;
                     currentState = IDLE;
                     lv_label_set_text(state_label, "IDLE");
-                    lv_label_set_text(action_btn, "Start");
+                    lv_label_set_text(action_btn_label, "Start");
                 }
                 update_ui();
                 lastTick = millis();
