@@ -14,8 +14,8 @@
 #define TS_MINY  300
 #define TS_MAXY  3700
 
-#define SCR_W  320
-#define SCR_H  240
+#define SCR_W  240
+#define SCR_H  320
 
 #define TOUCH_DEBOUNCE_MS  200
 
@@ -34,14 +34,14 @@ unsigned long remainingSeconds = WORK_TIME;
 unsigned long lastDisplayedSeconds = WORK_TIME;
 unsigned long lastTick         = 0;
 
-#define BTN_START_X  20
-#define BTN_START_Y  180
-#define BTN_START_W  120
+#define BTN_START_X  30
+#define BTN_START_Y  200
+#define BTN_START_W  180
 #define BTN_START_H  50
 
-#define BTN_RESET_X  180
-#define BTN_RESET_Y  180
-#define BTN_RESET_W  120
+#define BTN_RESET_X  30
+#define BTN_RESET_Y  270
+#define BTN_RESET_W  180
 #define BTN_RESET_H  50
 
 static bool          touchPhysical    = false;
@@ -54,20 +54,20 @@ void drawInitialScreen() {
   tft.fillScreen(TFT_BLACK);
   
   tft.setTextColor(TFT_CYAN, TFT_BLACK);
-  tft.setTextSize(2);
-  tft.setCursor(10, 10);
+  tft.setTextSize(3);
+  tft.setCursor(20, 20);
   tft.print("Pomodoro");
 
   tft.fillRoundRect(BTN_START_X, BTN_START_Y, BTN_START_W, BTN_START_H, 8, TFT_DARKGREEN);
   tft.setTextColor(TFT_WHITE, TFT_DARKGREEN);
   tft.setTextSize(2);
-  tft.setCursor(BTN_START_X + 20, BTN_START_Y + 12);
+  tft.setCursor(BTN_START_X + 50, BTN_START_Y + 16);
   tft.print("Start");
 
   tft.fillRoundRect(BTN_RESET_X, BTN_RESET_Y, BTN_RESET_W, BTN_RESET_H, 8, TFT_MAROON);
   tft.setTextColor(TFT_WHITE, TFT_MAROON);
   tft.setTextSize(2);
-  tft.setCursor(BTN_RESET_X + 30, BTN_RESET_Y + 12);
+  tft.setCursor(BTN_RESET_X + 60, BTN_RESET_Y + 16);
   tft.print("Reset");
 }
 
@@ -82,8 +82,8 @@ void updateDisplay() {
 
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
   tft.setTextSize(2);
-  tft.setCursor(10, 50);
-  tft.fillRect(10, 50, 100, 16, TFT_BLACK);
+  tft.setCursor(20, 80);
+  tft.fillRect(20, 80, 200, 16, TFT_BLACK);
   switch (currentState) {
     case IDLE:     tft.print("IDLE");   break;
     case WORKING:  tft.print("WORK");   break;
@@ -92,9 +92,9 @@ void updateDisplay() {
   }
 
   tft.setTextColor(TFT_YELLOW, TFT_BLACK);
-  tft.setTextSize(6);
-  tft.fillRect(30, 90, 260, 50, TFT_BLACK);
-  tft.setCursor(30, 90);
+  tft.setTextSize(7);
+  tft.fillRect(10, 120, 220, 60, TFT_BLACK);
+  tft.setCursor(30, 125);
   unsigned int mins = remainingSeconds / 60;
   unsigned int secs = remainingSeconds % 60;
   char buf[6];
@@ -105,7 +105,7 @@ void updateDisplay() {
     tft.fillRoundRect(BTN_START_X, BTN_START_Y, BTN_START_W, BTN_START_H, 8, TFT_DARKGREEN);
     tft.setTextColor(TFT_WHITE, TFT_DARKGREEN);
     tft.setTextSize(2);
-    tft.setCursor(BTN_START_X + 20, BTN_START_Y + 12);
+    tft.setCursor(BTN_START_X + 50, BTN_START_Y + 16);
     if (currentState == WORKING || currentState == BREAKING)
       tft.print("Pause");
     else
@@ -173,14 +173,14 @@ void handleTouchEvent() {
 void setup() {
   Serial.begin(115200);
   delay(400);
-  Serial.println("\nPomodoro Timer starting...");
+  Serial.println("\nPomodoro Timer starting (Portrait)...");
 
   tft.init();
-  tft.setRotation(1);
+  tft.setRotation(0);
 
   touchSPI.begin(TOUCH_CLK, TOUCH_MISO, TOUCH_MOSI, TOUCH_CS_PIN);
   touch.begin(touchSPI);
-  touch.setRotation(1);
+  touch.setRotation(0);
 
   remainingSeconds = WORK_TIME;
   targetTime       = WORK_TIME;
@@ -190,7 +190,7 @@ void setup() {
   touchReleasedMs  = millis();
 
   drawInitialScreen();
-  Serial.println("Ready. Buttons: Start(20,180,120x50) Reset(180,180,120x50)");
+  Serial.println("Ready (Portrait). Buttons: Start(30,200,180x50) Reset(30,270,180x50)");
 }
 
 void loop() {
