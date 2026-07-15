@@ -34,14 +34,14 @@ unsigned long remainingSeconds = WORK_TIME;
 unsigned long lastDisplayedSeconds = WORK_TIME;
 unsigned long lastTick         = 0;
 
-#define BTN_START_X  30
+#define BTN_START_X  20
 #define BTN_START_Y  200
-#define BTN_START_W  180
+#define BTN_START_W  200
 #define BTN_START_H  50
 
-#define BTN_RESET_X  30
+#define BTN_RESET_X  20
 #define BTN_RESET_Y  270
-#define BTN_RESET_W  180
+#define BTN_RESET_W  200
 #define BTN_RESET_H  50
 
 static bool          touchPhysical    = false;
@@ -50,25 +50,23 @@ static int           touchX           = 0;
 static int           touchY           = 0;
 static unsigned long touchReleasedMs  = 0;
 
+void drawCenteredText(int x, int y, const char* text, uint16_t color, int size) {
+  tft.setTextSize(size);
+  tft.setTextColor(color, TFT_BLACK);
+  tft.setTextDatum(MC_DATUM);
+  tft.drawString(text, x, y);
+}
+
 void drawInitialScreen() {
   tft.fillScreen(TFT_BLACK);
   
-  tft.setTextColor(TFT_CYAN, TFT_BLACK);
-  tft.setTextSize(3);
-  tft.setCursor(20, 20);
-  tft.print("Pomodoro");
+  drawCenteredText(120, 30, "Pomodoro", TFT_CYAN, 3);
 
-  tft.fillRoundRect(BTN_START_X, BTN_START_Y, BTN_START_W, BTN_START_H, 8, TFT_DARKGREEN);
-  tft.setTextColor(TFT_WHITE, TFT_DARKGREEN);
-  tft.setTextSize(2);
-  tft.setCursor(BTN_START_X + 50, BTN_START_Y + 16);
-  tft.print("Start");
+  tft.fillRoundRect(BTN_START_X, BTN_START_Y, BTN_START_W, BTN_START_H, 10, TFT_DARKGREEN);
+  drawCenteredText(120, 225, "Start", TFT_WHITE, 2);
 
-  tft.fillRoundRect(BTN_RESET_X, BTN_RESET_Y, BTN_RESET_W, BTN_RESET_H, 8, TFT_MAROON);
-  tft.setTextColor(TFT_WHITE, TFT_MAROON);
-  tft.setTextSize(2);
-  tft.setCursor(BTN_RESET_X + 60, BTN_RESET_Y + 16);
-  tft.print("Reset");
+  tft.fillRoundRect(BTN_RESET_X, BTN_RESET_Y, BTN_RESET_W, BTN_RESET_H, 10, TFT_MAROON);
+  drawCenteredText(120, 295, "Reset", TFT_WHITE, 2);
 }
 
 void updateDisplay() {
@@ -80,36 +78,33 @@ void updateDisplay() {
   lastDisplayedState = currentState;
   lastDisplayedSeconds = remainingSeconds;
 
-  tft.setTextColor(TFT_WHITE, TFT_BLACK);
-  tft.setTextSize(2);
-  tft.setCursor(20, 80);
-  tft.fillRect(20, 80, 200, 16, TFT_BLACK);
+  tft.fillRect(0, 75, 240, 20, TFT_BLACK);
+  const char* stateStr;
   switch (currentState) {
-    case IDLE:     tft.print("IDLE");   break;
-    case WORKING:  tft.print("WORK");   break;
-    case BREAKING: tft.print("BREAK");  break;
-    case PAUSED:   tft.print("PAUSED"); break;
+    case IDLE:     stateStr = "IDLE";   break;
+    case WORKING:  stateStr = "WORK";   break;
+    case BREAKING: stateStr = "BREAK";  break;
+    case PAUSED:   stateStr = "PAUSED"; break;
+    default:       stateStr = "---";    break;
   }
+  drawCenteredText(120, 85, stateStr, TFT_WHITE, 2);
 
-  tft.setTextColor(TFT_YELLOW, TFT_BLACK);
-  tft.setTextSize(7);
-  tft.fillRect(10, 120, 220, 60, TFT_BLACK);
-  tft.setCursor(30, 125);
+  tft.fillRect(0, 115, 240, 75, TFT_BLACK);
   unsigned int mins = remainingSeconds / 60;
   unsigned int secs = remainingSeconds % 60;
   char buf[6];
   sprintf(buf, "%02d:%02d", mins, secs);
-  tft.print(buf);
+  tft.setTextSize(7);
+  tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+  tft.setTextDatum(MC_DATUM);
+  tft.drawString(buf, 120, 150);
 
   if (stateChanged) {
-    tft.fillRoundRect(BTN_START_X, BTN_START_Y, BTN_START_W, BTN_START_H, 8, TFT_DARKGREEN);
-    tft.setTextColor(TFT_WHITE, TFT_DARKGREEN);
-    tft.setTextSize(2);
-    tft.setCursor(BTN_START_X + 50, BTN_START_Y + 16);
+    tft.fillRoundRect(BTN_START_X, BTN_START_Y, BTN_START_W, BTN_START_H, 10, TFT_DARKGREEN);
     if (currentState == WORKING || currentState == BREAKING)
-      tft.print("Pause");
+      drawCenteredText(120, 225, "Pause", TFT_WHITE, 2);
     else
-      tft.print("Start");
+      drawCenteredText(120, 225, "Start", TFT_WHITE, 2);
   }
 }
 
@@ -190,7 +185,7 @@ void setup() {
   touchReleasedMs  = millis();
 
   drawInitialScreen();
-  Serial.println("Ready (Portrait). Buttons: Start(30,200,180x50) Reset(30,270,180x50)");
+  Serial.println("Ready (Portrait). Buttons: Start(20,200,200x50) Reset(20,270,200x50)");
 }
 
 void loop() {
