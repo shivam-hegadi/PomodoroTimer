@@ -169,21 +169,45 @@ static void work_time_minus_event(lv_event_t *e)
 static void break_time_plus_event(lv_event_t *e)
 {
     BREAK_TIME += 60;
-    lv_obj_t *parent = lv_obj_get_parent((lv_obj_t *)lv_event_get_target(e));
-    lv_obj_t *break_label = lv_obj_get_child(parent, 6);
-    char break_txt[20];
-    sprintf(break_txt, "Break: %ldm", BREAK_TIME / 60);
-    lv_label_set_text(break_label, break_txt);
+    lv_obj_t *scr = lv_screen_active();
+    lv_obj_t *break_label = NULL;
+    for (int i = 0; i < lv_obj_get_child_cnt(scr); i++) {
+        lv_obj_t *child = lv_obj_get_child(scr, i);
+        if (lv_obj_check_type(child, &lv_label_class)) {
+            const char *text = lv_label_get_text(child);
+            if (text && strstr(text, "Break:")) {
+                break_label = child;
+                break;
+            }
+        }
+    }
+    if (break_label) {
+        char break_txt[20];
+        sprintf(break_txt, "Break: %ldm", BREAK_TIME / 60);
+        lv_label_set_text(break_label, break_txt);
+    }
 }
 
 static void break_time_minus_event(lv_event_t *e)
 {
     if (BREAK_TIME > 60) BREAK_TIME -= 60;
-    lv_obj_t *parent = lv_obj_get_parent((lv_obj_t *)lv_event_get_target(e));
-    lv_obj_t *break_label = lv_obj_get_child(parent, 6);
-    char break_txt[20];
-    sprintf(break_txt, "Break: %ldm", BREAK_TIME / 60);
-    lv_label_set_text(break_label, break_txt);
+    lv_obj_t *scr = lv_screen_active();
+    lv_obj_t *break_label = NULL;
+    for (int i = 0; i < lv_obj_get_child_cnt(scr); i++) {
+        lv_obj_t *child = lv_obj_get_child(scr, i);
+        if (lv_obj_check_type(child, &lv_label_class)) {
+            const char *text = lv_label_get_text(child);
+            if (text && strstr(text, "Break:")) {
+                break_label = child;
+                break;
+            }
+        }
+    }
+    if (break_label) {
+        char break_txt[20];
+        sprintf(break_txt, "Break: %ldm", BREAK_TIME / 60);
+        lv_label_set_text(break_label, break_txt);
+    }
 }
 
 static void auto_start_toggle_event(lv_event_t *e)
@@ -245,11 +269,11 @@ void open_settings_menu()
     lv_label_set_text(break_label, break_txt);
     lv_obj_set_style_text_color(break_label, lv_color_white(), 0);
     lv_obj_set_style_text_font(break_label, &lv_font_montserrat_16, 0);
-    lv_obj_align(break_label, LV_ALIGN_TOP_MID, -60, 150);
+    lv_obj_align(break_label, LV_ALIGN_TOP_MID, -60, 140);
 
     lv_obj_t *break_plus = lv_btn_create(settings_modal);
     lv_obj_set_size(break_plus, 40, 35);
-    lv_obj_align(break_plus, LV_ALIGN_TOP_MID, 40, 148);
+    lv_obj_align(break_plus, LV_ALIGN_TOP_MID, 40, 138);
     lv_obj_set_style_bg_color(break_plus, lv_color_hex(0x2E8B57), 0);
     lv_obj_add_event_cb(break_plus, break_time_plus_event, LV_EVENT_CLICKED, NULL);
     lv_obj_t *bp_label = lv_label_create(break_plus);
@@ -258,7 +282,7 @@ void open_settings_menu()
 
     lv_obj_t *break_minus = lv_btn_create(settings_modal);
     lv_obj_set_size(break_minus, 40, 35);
-    lv_obj_align(break_minus, LV_ALIGN_TOP_MID, 40, 192);
+    lv_obj_align(break_minus, LV_ALIGN_TOP_MID, 40, 182);
     lv_obj_set_style_bg_color(break_minus, lv_color_hex(0x800000), 0);
     lv_obj_add_event_cb(break_minus, break_time_minus_event, LV_EVENT_CLICKED, NULL);
     lv_obj_t *bm_label = lv_label_create(break_minus);
@@ -267,7 +291,7 @@ void open_settings_menu()
 
     lv_obj_t *auto_btn = lv_btn_create(settings_modal);
     lv_obj_set_size(auto_btn, 200, 35);
-    lv_obj_align(auto_btn, LV_ALIGN_CENTER, 0, 20);
+    lv_obj_align(auto_btn, LV_ALIGN_TOP_MID, 0, 235);
     lv_obj_set_style_bg_color(auto_btn, lv_color_hex(0x4169E1), 0);
     lv_obj_add_event_cb(auto_btn, auto_start_toggle_event, LV_EVENT_CLICKED, NULL);
     lv_obj_t *auto_label = lv_label_create(auto_btn);
