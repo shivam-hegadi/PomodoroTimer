@@ -89,6 +89,12 @@ https://github.com/user-attachments/assets/4d5b32fd-0384-48a7-8633-e0477c642308
 
 
 
+## Journal 17
+I made a 3D printed case for the ESP32 CYD and assembled it. The final product can be seen here: https://youtu.be/89NieqJ5Dcc (live demo)
+
+
+
+
 ## Time Tracking - Total Time: 9.4 Hours
 Breakdown : 5 Hours 36 min coding , 3 hours 50 minutes Lapse Hardware
 Hackatime proof: 
